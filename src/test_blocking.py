@@ -104,9 +104,22 @@ def test_key_functions() -> None:
     _chk("r6_empty_addr",      keys_r6("", "mill") == [])
     _chk("r6_empty_name",      keys_r6("123 main", "") == [])
 
-    # all_keys returns all 6 rules
+    # R7 — first addr token ≥3 chars + country
+    from blocking import keys_r7, keys_r8
+    k = keys_r7("af-684, nandgram, india", "India")
+    _chk("r7_first_long_token",  k == ["684|India"], f"got {k}")  # "af" is 2 chars, skipped; "684" is first >=3
+    _chk("r7_empty_addr",        keys_r7("", "India") == [])
+    _chk("r7_short_tokens_skip", keys_r7("a b c 1234", "US") == ["1234|US"])
+
+    # R8 — 4-char name prefix + country
+    k = keys_r8("miller metals", "US")
+    _chk("r8_prefix4",           k == ["mill|US"], f"got {k}")
+    _chk("r8_short_name",        keys_r8("abc", "US") == [])
+    _chk("r8_devanagari",        len(keys_r8("राम मार्केटिंग", "India")) > 0)
+
+    # all_keys returns all 8 rules
     kd = all_keys("miller metals", "1795 main st", "US")
-    _chk("all_keys_6_rules",   set(kd.keys()) == {"r1","r2","r3","r4","r5","r6"})
+    _chk("all_keys_8_rules",   set(kd.keys()) == {"r1","r2","r3","r4","r5","r6","r7","r8"})
 
 
 # ─── Multilingual tests ───────────────────────────────────────────────────────

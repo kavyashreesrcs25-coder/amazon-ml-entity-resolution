@@ -1,17 +1,17 @@
 """
 blocking.py
 ===========
-Person 2 — Blocking / Candidate Generation
+Person 2 -- Blocking / Candidate Generation
 Amazon ML Challenge 2026: Business Entity Resolution
 
-DESIGN — disk-based sorted lookup, low RAM
+DESIGN -- disk-based sorted lookup, low RAM
 ------------------------------------------
 Building 22M+ (block_key, cand_id) pairs in a Python list blows RAM to 6+ GB.
 This version writes the lookup to a **sorted TSV on disk** in two passes:
 
   Pass A (index build):
     Stream S2 and S3 preprocessed TSVs chunk by chunk.
-    For every row generate blocking keys → write (block_key, cand_id) rows
+    For every row generate blocking keys -> write (block_key, cand_id) rows
     directly to a temp file.  Never accumulate in RAM.
 
   Pass B (sort):
@@ -22,15 +22,15 @@ This version writes the lookup to a **sorted TSV on disk** in two passes:
     For each S1 chunk, look up matching cand_ids from the sorted lookup via
     a pandas merge.  Write results to candidate_pairs.tsv.
 
-Peak RAM stays ≈ 1.5–2 GB (one S1 chunk + one lookup shard at a time).
+Peak RAM stays ~= 1.5-2 GB (one S1 chunk + one lookup shard at a time).
 
 Six Blocking Rules
 ------------------
 R1  exact_name|country
 R2  name[:6]|country
 R3  sorted(first 2 significant tokens)|country
-R4  3-char grams of name[:24], max 3 per row|country  ← tighter than before
-R5  first ≥2-digit run in address|country
+R4  3-char grams of name[:24], max 3 per row|country  <- tighter than before
+R5  first >=2-digit run in address|country
 R6  first addr token|name[:4]
 """
 
@@ -77,13 +77,13 @@ PREPROCESSED = {
 CHUNKSIZE         = 200_000
 MAX_KEY_BUCKET    = 100       # drop keys with > 100 candidates (too common)
 NAME_GRAM_LEN     = 3
-NAME_GRAM_PREFIX  = 24        # shorter prefix → fewer Unicode codepoints
+NAME_GRAM_PREFIX  = 24        # shorter prefix -> fewer Unicode codepoints
 MAX_GRAMS_PER_ROW = 3
 MIN_TOKEN_LEN     = 2
 
 # ── Stop-words ────────────────────────────────────────────────────────────────
 # ENGLISH-ONLY legal/common words.  Non-Latin tokens (Devanagari, Bengali,
-# Arabic, Kannada, Tamil, French non-ASCII) are NEVER filtered by this list —
+# Arabic, Kannada, Tamil, French non-ASCII) are NEVER filtered by this list --
 # they carry full identity information.  The guard is applied in _sig_tokens:
 # only tokens that are entirely ASCII are checked against _STOP.
 _STOP = frozenset({
@@ -97,16 +97,16 @@ _STOP = frozenset({
 # ── Regex patterns ─────────────────────────────────────────────────────────────
 # re.UNICODE is the default in Python 3 str, but explicit for clarity.
 
-# Matches ≥2 consecutive digit characters (Unicode-digit-safe: matches
+# Matches >=2 consecutive digit characters (Unicode-digit-safe: matches
 # Western, Arabic-Indic, Devanagari digits etc.).
 _RE_DIGITS = re.compile(r"\d{2,}", re.UNICODE)
 
 # Tokeniser: split on ASCII whitespace and common ASCII separators (, . / -).
-# Non-Latin characters (Devanagari, Bengali, French accented chars, CJK …)
+# Non-Latin characters (Devanagari, Bengali, French accented chars, CJK ...)
 # are treated as word content and NOT split on.  This preserves:
-#   "राम मार्केटिंग"   → ["राम", "मार्केटिंग"]
-#   "société générale"  → ["société", "générale"]
-#   "123 main st"       → ["123", "main", "st"]
+#   "राम मार्केटिंग"   -> ["राम", "मार्केटिंग"]
+#   "société générale"  -> ["société", "générale"]
+#   "123 main st"       -> ["123", "main", "st"]
 _RE_TOKENS = re.compile(r"[^\s,./\-]+", re.UNICODE)
 
 
@@ -123,10 +123,10 @@ def _sig_tokens(name: str) -> list[str]:
     """Return significant tokens from a (already-normalised, lowercased) name.
 
     Rules:
-    - Token must be ≥ MIN_TOKEN_LEN Unicode codepoints.
+    - Token must be >= MIN_TOKEN_LEN Unicode codepoints.
     - If the token is entirely ASCII it must NOT appear in _STOP.
     - Non-ASCII tokens (Devanagari, Bengali, French words, etc.) are ALWAYS
-      kept — they are never filtered by the English stop-word list.
+      kept -- they are never filtered by the English stop-word list.
     """
     result = []
     for t in _RE_TOKENS.findall(name):
@@ -144,7 +144,7 @@ def keys_r1(name: str, country: str) -> list[str]:
 
 def keys_r2(name: str, country: str) -> list[str]:
     """6-codepoint name prefix + country. Unicode codepoint slicing is correct
-    for Devanagari/Bengali/Latin — e.g. 'राम मा'[:6] = 'राम मा' (6 chars)."""
+    for Devanagari/Bengali/Latin -- e.g. 'राम मा'[:6] = 'राम मा' (6 chars)."""
     p = name[:6]
     return [f"{p}|{country}"] if len(p) >= 3 else []
 
@@ -158,7 +158,7 @@ def keys_r3(name: str, country: str) -> list[str]:
 
 def keys_r4(name: str, country: str) -> list[str]:
     """3-codepoint grams of name prefix + country.
-    Works on any Unicode script — slicing by codepoint is script-neutral."""
+    Works on any Unicode script -- slicing by codepoint is script-neutral."""
     s = name[:NAME_GRAM_PREFIX]
     if len(s) < NAME_GRAM_LEN:
         return []
@@ -169,8 +169,8 @@ def keys_r4(name: str, country: str) -> list[str]:
     return [f"{g}|{country}" for g in grams]
 
 def keys_r5(addr: str, country: str) -> list[str]:
-    """First ≥2-digit run in address + country.
-    _RE_DIGITS matches Unicode digits (Western, Arabic-Indic, Devanagari…)."""
+    """First >=2-digit run in address + country.
+    _RE_DIGITS matches Unicode digits (Western, Arabic-Indic, Devanagari...)."""
     if not addr:
         return []
     nums = _RE_DIGITS.findall(addr)
@@ -186,6 +186,42 @@ def keys_r6(addr: str, name: str) -> list[str]:
             return [f"{t}|{name[:4]}"]
     return []
 
+
+
+def keys_r7(addr: str, country: str) -> list[str]:
+    """R7: First address token of >=3 chars + country.
+
+    Cross-script anchor for pairs where S1 name is Latin and S2/S3 name is
+    Devanagari/Tamil/Telugu/Bengali (char overlap = 0).  Both records share
+    the same address, so the first meaningful address token is the link.
+
+    Examples:
+      "af-684, nandgram ..."  -> "af|India"
+      "wz-187c shop ..."      -> "wz|India"
+      "6(29), c.i.t. ..."    -> "6(29)|India"
+    """
+    if not addr:
+        return []
+    for t in _RE_TOKENS.findall(addr):
+        if len(t) >= 3:
+            return [f"{t}|{country}"]
+    return []
+
+
+def keys_r8(name: str, country: str) -> list[str]:
+    """R8: 4-codepoint name prefix + country.
+
+    More specific than the existing 3-char gram (R4) -- higher precision.
+    Works on any Unicode script (codepoint slicing).
+
+    Examples:
+      "miller metals"    -> "mill|US"
+      "crystal staffing" -> "crys|US"
+    """
+    if len(name) < 4:
+        return []
+    return [f"{name[:4]}|{country}"]
+
 def all_keys(name: str, addr: str, country: str) -> dict[str, list[str]]:
     return {
         "r1": keys_r1(name, country),
@@ -194,11 +230,13 @@ def all_keys(name: str, addr: str, country: str) -> dict[str, list[str]]:
         "r4": keys_r4(name, country),
         "r5": keys_r5(addr, country),
         "r6": keys_r6(addr, name),
+        "r7": keys_r7(addr, country),
+        "r8": keys_r8(name, country),
     }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# VECTORISED KEY GENERATION  (one chunk → long-form DataFrame)
+# VECTORISED KEY GENERATION  (one chunk -> long-form DataFrame)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _build_keys_df(chunk: pd.DataFrame) -> pd.DataFrame:
@@ -215,19 +253,19 @@ def _build_keys_df(chunk: pd.DataFrame) -> pd.DataFrame:
 
     parts = []
 
-    # R1 — exact name|country (0.09s / 200k)
+    # R1 -- exact name|country (0.09s / 200k)
     mask = name.str.len() > 0
     if mask.any():
         k = (name[mask] + "|" + ctry[mask])
         parts.append(pd.DataFrame({"entity_id": eid[mask].values, "block_key": k.values}))
 
-    # R2 — prefix-6|country (0.10s / 200k)
+    # R2 -- prefix-6|country (0.10s / 200k)
     mask = name.str.len() >= 3
     if mask.any():
         k = (name[mask].str[:6] + "|" + ctry[mask])
         parts.append(pd.DataFrame({"entity_id": eid[mask].values, "block_key": k.values}))
 
-    # R3 — sorted 2-sig-token key|country
+    # R3 -- sorted 2-sig-token key|country
     # Non-Latin tokens bypass the English stop-word list (see _sig_tokens).
     def _r3(n: str) -> str:
         toks = _sig_tokens(n)
@@ -238,7 +276,7 @@ def _build_keys_df(chunk: pd.DataFrame) -> pd.DataFrame:
         k = (r3_base[mask] + "|" + ctry[mask])
         parts.append(pd.DataFrame({"entity_id": eid[mask].values, "block_key": k.values}))
 
-    # R4 — 3-char grams at 2 fixed offsets (vectorised, 0.3s / 200k)
+    # R4 -- 3-char grams at 2 fixed offsets (vectorised, 0.3s / 200k)
     s_short = name.str[:NAME_GRAM_PREFIX]
     mask    = s_short.str.len() >= NAME_GRAM_LEN
     if mask.any():
@@ -253,18 +291,31 @@ def _build_keys_df(chunk: pd.DataFrame) -> pd.DataFrame:
             k1 = g1 + "|" + ctry[mask2]
             parts.append(pd.DataFrame({"entity_id": eid[mask2].values, "block_key": k1.values}))
 
-    # R5 — first ≥2-digit run|country (0.48s / 200k)
+    # R5 -- first >=2-digit run|country (0.48s / 200k)
     r5_num = addr.str.extract(r"(\d{2,})", expand=False)
     mask   = r5_num.notna()
     if mask.any():
         k = (r5_num[mask] + "|" + ctry[mask])
         parts.append(pd.DataFrame({"entity_id": eid[mask].values, "block_key": k.values}))
 
-    # R6 — first addr token|name[:4] (0.42s / 200k)
+    # R6 -- first addr token|name[:4] (0.42s / 200k)
     r6_tok = addr.str.extract(r"([^\s,./\-]{2,})", expand=False)
     mask   = r6_tok.notna() & (name.str.len() >= 1)
     if mask.any():
         k = (r6_tok[mask] + "|" + name[mask].str[:4])
+        parts.append(pd.DataFrame({"entity_id": eid[mask].values, "block_key": k.values}))
+
+    # R7 -- first addr token of >=3 chars + country (cross-script anchor)
+    r7_tok = addr.str.extract(r"([^\s,./\-]{3,})", expand=False)
+    mask   = r7_tok.notna()
+    if mask.any():
+        k = (r7_tok[mask] + "|" + ctry[mask])
+        parts.append(pd.DataFrame({"entity_id": eid[mask].values, "block_key": k.values}))
+
+    # R8 -- 4-codepoint name prefix + country (higher precision than 3-char R4)
+    mask = name.str.len() >= 4
+    if mask.any():
+        k = (name[mask].str[:4] + "|" + ctry[mask])
         parts.append(pd.DataFrame({"entity_id": eid[mask].values, "block_key": k.values}))
 
     if not parts:
@@ -275,7 +326,7 @@ def _build_keys_df(chunk: pd.DataFrame) -> pd.DataFrame:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PASS A — stream S2+S3 → write raw lookup TSV to disk (no RAM accumulation)
+# PASS A -- stream S2+S3 -> write raw lookup TSV to disk (no RAM accumulation)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def build_raw_lookup_file(
@@ -285,7 +336,7 @@ def build_raw_lookup_file(
     chunksize: int = CHUNKSIZE,
     verbose: bool = True,
 ) -> int:
-    """Stream S2 and S3 → write (block_key, cand_id) TSV to disk.
+    """Stream S2 and S3 -> write (block_key, cand_id) TSV to disk.
 
     Returns total rows written.
     """
@@ -328,7 +379,7 @@ def build_raw_lookup_file(
 
             if verbose:
                 elapsed = time.perf_counter() - t0
-                print(f"  [{src_label}] done — {src_rows:,} rows | "
+                print(f"  [{src_label}] done -- {src_rows:,} rows | "
                       f"total pairs so far: {total:,} | {elapsed:.0f}s",
                       flush=True)
 
@@ -340,7 +391,7 @@ def build_raw_lookup_file(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PASS B — sort + cap hot keys  (pandas chunk sort → write sorted lookup)
+# PASS B -- sort + cap hot keys  (pandas chunk sort -> write sorted lookup)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def sort_and_cap_lookup(
@@ -362,7 +413,8 @@ def sort_and_cap_lookup(
     # Read in chunks, sort each, write to temp shards, then merge-sort.
     # For files up to ~8 GB this single-pass sort works fine on most machines.
     df = pd.read_csv(raw_path, sep="\t", dtype=str, on_bad_lines="skip",
-                     names=["block_key", "cand_id"], header=0)
+                     names=["block_key", "cand_id"], header=0,
+                     quoting=3)   # QUOTE_NONE: ignore quote chars in data
 
     if verbose:
         print(f"  Loaded {len(df):,} pairs into RAM for sorting | "
@@ -389,7 +441,7 @@ def sort_and_cap_lookup(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PASS C — retrieve candidates for S1 via chunked merge
+# PASS C -- retrieve candidates for S1 via chunked merge
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _get_candidates_for_chunk(
@@ -445,7 +497,7 @@ def _get_candidates_for_chunk(
             if len(name) >= NAME_GRAM_LEN + 6:
                 _add(lookup_dict.get(f"{name[6:6+NAME_GRAM_LEN]}|{ctry}"))
 
-        # R5 first ≥2-digit run in address
+        # R5 first >=2-digit run in address
         nums = _RE_DIGITS.findall(addr)
         if nums:
             _add(lookup_dict.get(f"{nums[0]}|{ctry}"))
@@ -455,6 +507,17 @@ def _get_candidates_for_chunk(
             m = _RE_TOKENS.search(addr)
             if m and len(m.group(0)) >= 2:
                 _add(lookup_dict.get(f"{m.group(0)}|{name[:4]}"))
+
+        # R7 first addr token of >=3 chars + country (cross-script anchor)
+        if addr:
+            for t in _RE_TOKENS.findall(addr):
+                if len(t) >= 3:
+                    _add(lookup_dict.get(f"{t}|{ctry}"))
+                    break
+
+        # R8 4-codepoint name prefix + country
+        if len(name) >= 4:
+            _add(lookup_dict.get(f"{name[:4]}|{ctry}"))
 
         if cands:
             cands.discard(s1_id)   # no self-matches
@@ -475,14 +538,15 @@ def stream_retrieve(
 
     Loads the sorted lookup as a DataFrame once (stays in RAM as pandas,
     no Python dict overhead). For each S1 chunk, generates blocking keys,
-    sorts them, and does a pandas merge — pure C-level hash join.
+    sorts them, and does a pandas merge -- pure C-level hash join.
     """
     if verbose:
         print(f"  Loading sorted lookup DataFrame ...", flush=True)
     t0 = time.perf_counter()
 
     lookup = pd.read_csv(
-        sorted_lookup_path, sep="\t", dtype=str, on_bad_lines="skip"
+        sorted_lookup_path, sep="\t", dtype=str, on_bad_lines="skip",
+        quoting=3
     )
     total_lookup = len(lookup)
 
@@ -519,7 +583,7 @@ def stream_retrieve(
             kdf = _build_keys_df(chunk).rename(
                 columns={"entity_id": "source1_entity_id"})
 
-            # Merge S1 keys against lookup — C-level hash join
+            # Merge S1 keys against lookup -- C-level hash join
             merged = kdf.merge(lookup, on="block_key", how="inner")
             # Drop self-matches (shouldn't happen but guard)
             merged = merged[merged["source1_entity_id"] != merged["cand_id"]]
@@ -602,12 +666,12 @@ def run_blocking(
         raw_path    = Path(tmpdir) / "lookup_raw.tsv"
         sorted_path = Path(tmpdir) / "lookup_sorted.tsv"
 
-        # Pass A — write raw lookup to disk
+        # Pass A -- write raw lookup to disk
         if verbose:
             print(f"\n[Pass A] Building raw lookup file ...", flush=True)
         build_raw_lookup_file(s2_path, s3_path, raw_path, chunksize, verbose)
 
-        # Pass B — sort + cap
+        # Pass B -- sort + cap
         if verbose:
             print(f"\n[Pass B] Sorting and capping lookup ...", flush=True)
         sort_and_cap_lookup(raw_path, sorted_path, max_key_bucket,
@@ -615,7 +679,7 @@ def run_blocking(
         # free raw file disk space
         raw_path.unlink(missing_ok=True)
 
-        # Pass C — retrieve
+        # Pass C -- retrieve
         if verbose:
             print(f"\n[Pass C] Retrieving candidates for S1 ...", flush=True)
         stats = stream_retrieve(s1_path, sorted_path, output_path,
@@ -759,7 +823,7 @@ def _fmt(seconds: float) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Blocking — Amazon ML Challenge 2026")
+    p = argparse.ArgumentParser(description="Blocking -- Amazon ML Challenge 2026")
     p.add_argument("--split", choices=["train","test"], default="test")
     p.add_argument("--output", type=Path, default=OUTPUT_DIR/"candidate_pairs.tsv")
     p.add_argument("--max-key-bucket", type=int, default=MAX_KEY_BUCKET)
